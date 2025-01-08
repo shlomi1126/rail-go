@@ -43,4 +43,4 @@ jobs:
       # Build and push the Docker image to Docker Hub
     - name: Build and push Docker image
       run: |
-        docker buildx build --platform linux/arm/v7 -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.repository }}:latest --push
+          docker buildx build --platform linux/arm/v7 -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.repository }}:latest --push .
