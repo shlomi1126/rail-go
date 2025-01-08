@@ -1,0 +1,47 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build
+      run: |
+          go mod tidy
+          go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+
+      # Set up Docker Buildx (to support multi-architecture)
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+      # Log in to Docker Hub (you need to store your credentials as secrets)
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Build and push the Docker image to Docker Hub
+    - name: Build and push Docker image
+      run: |
+        docker buildx build --platform linux/arm/v7 -t ${{ secrets.DOCKER_USERNAME }}/your-image-name:latest .
+        docker push ${{ secrets.DOCKER_USERNAME }}/your-image-name:latest
