@@ -34,8 +34,8 @@ jobs:
       - name: Archive binary
         uses: actions/upload-artifact@v4
         with:
-          name: myapp
-          path: ./myapp
+          name: app
+          path: ./app
 
   build-and-push:
     needs: test-and-build
@@ -44,7 +44,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: myapp
+          name: app
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
