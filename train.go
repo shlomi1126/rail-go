@@ -70,6 +70,7 @@ func getRailSchedule(userName, from, to string) string {
 	}
 
 	// Print the formatted JSON
+
 	return string(prettyJSON)
 }
 
