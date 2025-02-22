@@ -22,7 +22,7 @@ FROM alpine:latest
 WORKDIR /root/
 
 
-COPY --FROM=builder /app/main .
+COPY --from=builder /app/main .
 
 
 EXPOSE 8080
