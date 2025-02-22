@@ -16,16 +16,6 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Cache Go modules and build cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/*.mod') }}-${{ hashFiles('**/*.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
       - name: Build and Test
         run: |
           go build -v -o app ./...
@@ -56,7 +46,7 @@ jobs:
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v4
@@ -70,4 +60,3 @@ jobs:
             BINARY=app
           labels: |
             org.opencontainers.image.source=${{ github.repository }}
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ github.sha }},mode=max
