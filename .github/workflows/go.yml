@@ -63,7 +63,7 @@ jobs:
         with:
           context: .
           dockerfile: Dockerfile
-          platforms: linux/amd64
+          platforms: linux/arm64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ github.sha }}
