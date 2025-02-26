@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/wk8/go-ordered-map/v2"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,7 +32,7 @@ type Train struct {
 	Trains []TrainRoutePart `json:"trains,omitempty"`
 }
 type TrainRoutePart struct {
-	OrignStation       int    `json:"orignStation,omitempty"`
+	OriginStation      int    `json:"orignStation,omitempty"`
 	DestinationStation int    `json:"destinationStation,omitempty"`
 	ArrivalTime        string `json:"arrivalTime,omitempty"`
 	DepartureTime      string `json:"departureTime,omitempty"`
@@ -41,7 +43,7 @@ type TrainRoutePart struct {
 type Ans map[string]map[string]TrainRoutePartS
 
 type TrainRoutePartS struct {
-	OrignStation       string `json:"orignStation,omitempty"`
+	OriginStation      string `json:"originStation,omitempty"`
 	DepartureTime      string `json:"departureTime,omitempty"`
 	OriginPlatform     int    `json:"originPlatform,omitempty"`
 	DestinationStation string `json:"destinationStation,omitempty"`
@@ -62,19 +64,10 @@ type RailApi struct {
 }
 
 func getRailSchedule(userName, from, to string) string {
-	ans := getSchedule(userName, from, to)
-	prettyJSON, err := json.MarshalIndent(ans, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling to JSON:", err)
-		return err.Error()
-	}
-
-	// Print the formatted JSON
-	// change
-	return string(prettyJSON)
+	return getSchedule(userName, from, to)
 }
 
-func getSchedule(userName, from, to string) Ans {
+func getSchedule(userName, from, to string) string {
 	cache := NewCache()
 	ans := cache.Get(userName, from, to)
 	if ans == nil {
@@ -93,10 +86,11 @@ func getSchedule(userName, from, to string) Ans {
 		if err != nil {
 			log.Fatal(err)
 		}
-		ans = parse
+		parseString := formatAns(*parse)
+		ans = parseString
 		cache.Set(userName, from, to, ans)
 	}
-	return ans.(Ans)
+	return ans.(string)
 }
 func callRailAPI(params url.Values) []byte {
 	fullUrl := fmt.Sprintf("%s?%s", "https://israelrail.azurefd.net/rjpa-prod/api/v1/timetable/searchTrainLuzForDateTime", params.Encode())
@@ -124,33 +118,65 @@ func callRailAPI(params url.Values) []byte {
 	return body
 }
 
-func parseBody(body []byte) (Ans, error) {
+func parseBody(body []byte) (*orderedmap.OrderedMap[string, orderedmap.OrderedMap[string, TrainRoutePartS]], error) {
 	var rail Rail
 	err := json.Unmarshal(body, &rail)
 	if err != nil {
-		fmt.Println("Error:", err)
 		return nil, err
 	}
-	// take only 5 relevant results from all day list
-	rail.Result.Travels = rail.Result.Travels[rail.Result.StartFrom : rail.Result.StartFrom+rail.Result.NumResults]
-	ans := make(map[string]map[string]TrainRoutePartS)
+
+	// Get the total number of travels
+	totalTravels := len(rail.Result.Travels)
+
+	// Calculate start and end indices with bounds checking
+	startIndex := rail.Result.StartFrom
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	endIndex := startIndex + rail.Result.NumResults
+	if endIndex > totalTravels {
+		endIndex = totalTravels
+	}
+
+	// Slice the travels array safely
+	rail.Result.Travels = rail.Result.Travels[startIndex:endIndex]
+
+	ans := orderedmap.New[string, orderedmap.OrderedMap[string, TrainRoutePartS]]() // Ans is map[string]map[string]TrainRoutePartS
+
 	for j, travel := range rail.Result.Travels {
-		innerMap := make(map[string]TrainRoutePartS)
+		innerMap := orderedmap.New[string, TrainRoutePartS]()
 
 		for i, train := range travel.Trains {
-			innerMap[fmt.Sprintf("🚂 %v", i)] = TrainRoutePartS{
-				OrignStation:       getStation(train.OrignStation),
+			innerMap.Set(fmt.Sprintf("🚂 %d", i+1), TrainRoutePartS{
+				OriginStation:      getStation(train.OriginStation),
 				DepartureTime:      extractTime(train.DepartureTime),
 				OriginPlatform:     train.OriginPlatform,
 				DestinationStation: getStation(train.DestinationStation),
 				ArrivalTime:        extractTime(train.ArrivalTime),
 				DestPlatform:       train.DestPlatform,
-			}
+			})
 		}
-		ans[fmt.Sprintf("🚆- %v", j)] = innerMap
+		ans.Set(fmt.Sprintf("🚆 %d", j+1), *innerMap)
 	}
 	return ans, nil
 }
+
+func formatAns(ans orderedmap.OrderedMap[string, orderedmap.OrderedMap[string, TrainRoutePartS]]) string {
+	var sb strings.Builder
+	for pair := ans.Oldest(); pair != nil; pair = pair.Next() {
+		sb.WriteString(fmt.Sprintf("%s:\n", pair.Key))
+		for train := pair.Value.Oldest(); train != nil; train = train.Next() {
+			sb.WriteString(fmt.Sprintf("  %s:\n", train.Key))
+			sb.WriteString(fmt.Sprintf("    עליה: %s (רציף %d)\n", train.Value.OriginStation, train.Value.OriginPlatform))
+			sb.WriteString(fmt.Sprintf("    זמן יציאת הרכבת: %s\n", train.Value.DepartureTime))
+			sb.WriteString(fmt.Sprintf("    אל: %s (רציף %d)\n", train.Value.DestinationStation, train.Value.DestPlatform))
+			sb.WriteString(fmt.Sprintf("    זמן הגעה: %s\n", train.Value.ArrivalTime))
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
 func getStation(i int) string {
 	if val, ok := STATIONS[strconv.Itoa(i)]["Heb"]; ok {
 		return val

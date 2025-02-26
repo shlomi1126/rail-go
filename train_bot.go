@@ -6,5 +6,14 @@ var trainKeyBoard = tgbotapi.NewInlineKeyboardMarkup(
 	tgbotapi.NewInlineKeyboardRow(
 		tgbotapi.NewInlineKeyboardButtonData("home", "home"),
 		tgbotapi.NewInlineKeyboardButtonData("work", "work"),
+		tgbotapi.NewInlineKeyboardButtonData("other", "other"),
+	),
+)
+
+var trainStations = tgbotapi.NewInlineKeyboardMarkup(
+	tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("home", "home"),
+		tgbotapi.NewInlineKeyboardButtonData("work", "work"),
+		tgbotapi.NewInlineKeyboardButtonData("other", "other"),
 	),
 )
