@@ -60,71 +60,6 @@ func (bot *Bot) send(msg tgbotapi.MessageConfig) {
 		panic(err)
 	}
 }
-
-func handleCallbackQuery(bot *Bot, update tgbotapi.Update) {
-	chatID := update.CallbackQuery.Message.Chat.ID
-	data := update.CallbackQuery.Data
-
-	// Acknowledge the callback query
-	callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "")
-	if _, err := bot.Request(callback); err != nil {
-		log.Printf("Error acknowledging callback: %v", err)
-	}
-
-	switch data {
-	case "home":
-		userId := strconv.FormatInt(update.CallbackQuery.From.ID, 10)
-		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, "4600", "8700"))
-		bot.Send(msg)
-
-	case "work":
-		userId := strconv.FormatInt(update.CallbackQuery.From.ID, 10)
-		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, "8700", "4600"))
-		bot.Send(msg)
-
-	case "other":
-		msg := tgbotapi.NewMessage(chatID, "אנא הקלד את האותיות הראשונות של שם התחנה.")
-		bot.Send(msg)
-		userState[chatID] = awaitingInput
-		log.Printf("Set user state to 'awaiting_input' for chatID %d", chatID)
-	case "search_train":
-		userId := strconv.FormatInt(update.CallbackQuery.From.ID, 10)
-		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, "8700", "4600"))
-		bot.Send(msg)
-
-	default:
-		if userState[chatID] == awaitingSelection {
-			selectedStation := data
-			msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("בחרת את התחנה: %s", STATIONS[selectedStation]["Heb"]))
-			bot.Send(msg)
-			if from == "" || to == "" {
-				if from == "" {
-					from = selectedStation
-				}
-				if from != "" && to == "" {
-					to = selectedStation
-				}
-				msg = tgbotapi.NewMessage(chatID, "אנא הקלד את האותיות הראשונות של שם תחנת היעד.")
-				bot.Send(msg)
-				userState[chatID] = awaitingInput
-			} else {
-				to = selectedStation
-				btn := tgbotapi.NewInlineKeyboardButtonData("חפש", "search_train")
-				inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{btn})
-				msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("רכבת מתחנת %v לתחנת %v", STATIONS[from]["Heb"], STATIONS[to]["Heb"]))
-				msg.ReplyMarkup = inlineKeyboard
-				userState[chatID] = "done"
-				bot.Send(msg)
-
-			}
-			log.Printf("change user state for chatID %d to awaiting_destination", chatID)
-		} else {
-			msg := tgbotapi.NewMessage(chatID, "פעולה לא מוכרת.")
-			bot.Send(msg)
-		}
-	}
-}
-
 func handleMessage(bot *Bot, update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userText := update.Message.Text
@@ -154,14 +89,6 @@ func handleMessage(bot *Bot, update tgbotapi.Update) {
 		userState[chatID] = awaitingSelection
 		log.Printf("Set user state to 'awaitingSelection' for chatID %d", chatID)
 
-	case "done":
-		userId := strconv.FormatInt(update.Message.From.ID, 10)
-		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, from, to))
-		bot.Send(msg)
-		from = ""
-		to = ""
-		userState[chatID] = ""
-
 	default:
 		// Handle other messages
 		switch userText {
@@ -177,6 +104,70 @@ func handleMessage(bot *Bot, update tgbotapi.Update) {
 			bot.Send(msg)
 		default:
 			msg := tgbotapi.NewMessage(chatID, "אנא בחר אופציה או הקלד את הפקודה הרצויה.")
+			bot.Send(msg)
+		}
+	}
+}
+
+func handleCallbackQuery(bot *Bot, update tgbotapi.Update) {
+	chatID := update.CallbackQuery.Message.Chat.ID
+	data := update.CallbackQuery.Data
+
+	// Acknowledge the callback query
+	callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "")
+	if _, err := bot.Request(callback); err != nil {
+		log.Printf("Error acknowledging callback: %v", err)
+	}
+
+	switch data {
+	case "home":
+		userId := strconv.FormatInt(update.CallbackQuery.From.ID, 10)
+		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, "4600", "8700"))
+		bot.Send(msg)
+
+	case "work":
+		userId := strconv.FormatInt(update.CallbackQuery.From.ID, 10)
+		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, "8700", "4600"))
+		bot.Send(msg)
+
+	case "other":
+		msg := tgbotapi.NewMessage(chatID, "אנא הקלד את האותיות הראשונות של שם התחנה.")
+		bot.Send(msg)
+		userState[chatID] = awaitingInput
+		log.Printf("Set user state to 'awaiting_input' for chatID %d", chatID)
+	case "search_train":
+		userId := strconv.FormatInt(update.CallbackQuery.From.ID, 10)
+		msg := tgbotapi.NewMessage(chatID, getRailSchedule(userId, from, to))
+		bot.Send(msg)
+
+	default:
+		if userState[chatID] == awaitingSelection {
+			selectedStation := data
+			msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("בחרת את התחנה: %s", STATIONS[selectedStation]["Heb"]))
+			bot.Send(msg)
+			if from == "" || to == "" {
+				if from == "" {
+					from = selectedStation
+				}
+				if from != "" && to == "" {
+					to = selectedStation
+				}
+				msg = tgbotapi.NewMessage(chatID, "אנא הקלד את האותיות הראשונות של שם תחנת היעד.")
+				bot.Send(msg)
+				userState[chatID] = awaitingInput
+			} else {
+				to = selectedStation
+				btn := tgbotapi.NewInlineKeyboardButtonData("חפש", "search_train")
+				inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{btn})
+				msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("רכבת מתחנת %v לתחנת %v", STATIONS[from]["Heb"], STATIONS[to]["Heb"]))
+				msg.ReplyMarkup = inlineKeyboard
+				userState[chatID] = "done"
+				bot.Send(msg)
+
+			}
+			log.Printf("change user state for chatID %d to %v", chatID, userState[chatID])
+		} else {
+			msg := tgbotapi.NewMessage(chatID, "פעולה לא מוכרת.")
 			bot.Send(msg)
 		}
 	}
