@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const TOKEN = "1402814094:AAHRSU0i38o83OESiRKKrjCqLqfMxug4kRA"
@@ -30,6 +31,12 @@ func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 6000
 	updates := bot.GetUpdatesChan(u)
+
+	runChan := make(chan time.Time)
+	stopChan := make(chan struct{})
+	doneChan := make(chan struct{})
+	go scheduler(runChan, stopChan)
+	go monthlyTask(bot, runChan, doneChan)
 
 	for update := range updates {
 		if update.CallbackQuery != nil {
