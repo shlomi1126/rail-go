@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
+var nowFunc = time.Now
+
 func nextMonthlyRun() time.Time {
-	now := time.Now()
+	now := nowFunc()
 
 	year, month, _ := now.Date()
 	loc := now.Location()
