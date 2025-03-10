@@ -11,6 +11,7 @@ import (
 
 const TOKEN = "1402814094:AAHRSU0i38o83OESiRKKrjCqLqfMxug4kRA"
 
+var chatID int64 = 519614625
 var from, to string
 
 type Bot struct {

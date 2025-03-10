@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-func nextMonthlyRun(now time.Time) time.Time {
+func nextMonthlyRun() time.Time {
+	now := time.Now()
+
 	year, month, _ := now.Date()
 	loc := now.Location()
 
@@ -19,10 +21,10 @@ func nextMonthlyRun(now time.Time) time.Time {
 	if durationUntilEnd.Hours() < 120.0 {
 		daysLeft := int(durationUntilEnd.Hours() / 24)
 		lastOfMonth = firstOfMonth.AddDate(0, 1, -daysLeft)
-		scheduledTime = time.Date(year, month, lastOfMonth.Day(), 0, 0, 0, 0, loc)
+		scheduledTime = time.Date(year, month, lastOfMonth.Day(), 8, 0, 0, 0, loc)
 
 	} else {
-		scheduledTime = time.Date(year, month, lastOfMonth.Day()-5, 0, 0, 0, 0, loc)
+		scheduledTime = time.Date(year, month, lastOfMonth.Day()-5, 8, 0, 0, 0, loc)
 	}
 
 	return scheduledTime
@@ -34,8 +36,7 @@ func nextMonthlyRun(now time.Time) time.Time {
 // A stop channel is used to shut it down gracefully.
 func scheduler(run chan<- time.Time, stop <-chan struct{}) {
 	for {
-		now := time.Date(2025, time.March, 28, 0, 0, 0, 0, time.UTC)
-		nextRunTime := nextMonthlyRun(now)
+		nextRunTime := nextMonthlyRun()
 		duration := time.Until(nextRunTime)
 		fmt.Printf("Scheduler: next run scheduled at %v (in %v)\n", nextRunTime, duration)
 
@@ -57,7 +58,7 @@ func scheduler(run chan<- time.Time, stop <-chan struct{}) {
 // then performs the work (here, simply printing messages).
 func monthlyTask(b *Bot, run <-chan time.Time, done chan<- struct{}) {
 	for t := range run {
-		msg := tgbotapi.NewMessageToChannel("shlomi1126", t.Local().Format("Mon Jan 2 15:04:05"))
+		msg := tgbotapi.NewMessage(chatID, t.Local().Format("Mon Jan 2 15:04:05"))
 		b.send(msg)
 		done <- struct{}{}
 	}
