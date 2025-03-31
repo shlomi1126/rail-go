@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 const TOKEN = "1402814094:AAHRSU0i38o83OESiRKKrjCqLqfMxug4kRA"
@@ -139,6 +140,7 @@ func handleCallbackQuery(bot *Bot, update tgbotapi.Update) {
 		bot.Send(msg)
 
 	case "other":
+		from, to = "", ""
 		msg := tgbotapi.NewMessage(chatID, "אנא הקלד את האותיות הראשונות של שם התחנה.")
 		bot.Send(msg)
 		userState[chatID] = awaitingInput
