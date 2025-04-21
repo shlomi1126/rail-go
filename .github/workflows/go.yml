@@ -28,7 +28,7 @@ jobs:
 
       - name: Build and Test
         run: |
-          go build -v -o app ./...
+          go build -v -o app ./cmd/bot
           go test -v ./...
 
       - name: Archive binary
