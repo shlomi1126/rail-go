@@ -23,6 +23,12 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# Install timezone data
+RUN apk add --no-cache tzdata
+
+# Set timezone to Jerusalem
+ENV TZ=Asia/Jerusalem
+
 # Copy the binary from builder
 COPY --from=builder /app/rail-go .
 # Copy the .env file
