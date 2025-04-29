@@ -17,6 +17,9 @@ func New() *Logger {
 	config.EncoderConfig.TimeKey = "timestamp"
 	config.EncoderConfig.MessageKey = "message"
 	config.EncoderConfig.LevelKey = "level"
+	config.EncoderConfig.CallerKey = "" // Remove caller information
+	config.DisableCaller = true         // Disable caller logging
+	config.DisableStacktrace = true     // Disable stacktrace logging
 
 	logger, err := config.Build()
 	if err != nil {
@@ -31,6 +34,9 @@ func NewDevelopment() *Logger {
 	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	config.EncoderConfig.CallerKey = "" // Remove caller information
+	config.DisableCaller = true         // Disable caller logging
+	config.DisableStacktrace = true     // Disable stacktrace logging
 
 	logger, err := config.Build()
 	if err != nil {
