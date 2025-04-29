@@ -54,6 +54,11 @@ func NewService(cfg *config.Config, log *logger.Logger) (*Service, error) {
 
 func (s *Service) Start(ctx context.Context) error {
 	s.logger.Info("bot service starting", "debug_mode", s.bot.Debug)
+
+	if err := s.sendStartupMessage(ctx); err != nil {
+		s.logger.Error("failed to send startup message", "error", err)
+	}
+
 	updates := s.bot.GetUpdatesChan(tgbotapi.UpdateConfig{
 		Timeout: s.config.Bot.Timeout,
 	})
@@ -69,6 +74,20 @@ func (s *Service) Start(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// sendStartupMessage sends a notification message when the service starts
+func (s *Service) sendStartupMessage(ctx context.Context) error {
+	if s.config.Bot.AdminChatID == 0 {
+		return nil
+	}
+
+	startupMsg := fmt.Sprintf("%s Bot Service Started\nVersion: %s\nDebug Mode: %v",
+		successEmoji,
+		s.config.Version,
+		s.bot.Debug)
+
+	return s.SendMessage(ctx, s.config.Bot.AdminChatID, startupMsg)
 }
 
 func (s *Service) handleUpdate(ctx context.Context, update tgbotapi.Update) error {
