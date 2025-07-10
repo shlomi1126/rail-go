@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -172,5 +173,94 @@ func TestCacheCleanup(t *testing.T) {
 	result2 := cache.Get("user2", "from2", "to2")
 	if result1 != nil || result2 != nil {
 		t.Error("Expected old entries to be cleaned up")
+	}
+}
+
+func TestCacheConcurrentAccess(t *testing.T) {
+	cache := NewCache()
+	
+	// Clear cache for test isolation
+	cache.mutex.Lock()
+	cache.value = make(map[[20]byte]trainData)
+	cache.mutex.Unlock()
+	
+	const numGoroutines = 100
+	const numOperations = 10
+	
+	// Test concurrent writes
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			for j := 0; j < numOperations; j++ {
+				cache.Set(fmt.Sprintf("user%d", id), fmt.Sprintf("from%d", j), fmt.Sprintf("to%d", j), fmt.Sprintf("data%d_%d", id, j))
+			}
+		}(i)
+	}
+	
+	// Test concurrent reads
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			for j := 0; j < numOperations; j++ {
+				cache.Get(fmt.Sprintf("user%d", id), fmt.Sprintf("from%d", j), fmt.Sprintf("to%d", j))
+			}
+		}(i)
+	}
+	
+	// Give goroutines time to complete
+	time.Sleep(500 * time.Millisecond)
+	
+	// Test that cache is still functional after concurrent access
+	cache.Set("test", "from", "to", "value")
+	result := cache.Get("test", "from", "to")
+	if result != "value" {
+		t.Error("Cache not functional after concurrent access")
+	}
+}
+
+func TestCacheRaceCondition(t *testing.T) {
+	cache := NewCache()
+	
+	// Clear cache for test isolation
+	cache.mutex.Lock()
+	cache.value = make(map[[20]byte]trainData)
+	cache.mutex.Unlock()
+	
+	const numGoroutines = 50
+	done := make(chan bool, numGoroutines*2)
+	
+	// Start multiple goroutines that read and write simultaneously
+	for i := 0; i < numGoroutines; i++ {
+		// Writer goroutine
+		go func(id int) {
+			defer func() { done <- true }()
+			for j := 0; j < 20; j++ {
+				cache.Set("user", "from", "to", fmt.Sprintf("data%d_%d", id, j))
+				time.Sleep(1 * time.Millisecond)
+			}
+		}(i)
+		
+		// Reader goroutine
+		go func(id int) {
+			defer func() { done <- true }()
+			for j := 0; j < 20; j++ {
+				cache.Get("user", "from", "to")
+				time.Sleep(1 * time.Millisecond)
+			}
+		}(i)
+	}
+	
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines*2; i++ {
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Test timed out - possible deadlock")
+		}
+	}
+	
+	// Verify cache is still operational
+	cache.Set("final", "test", "check", "success")
+	result := cache.Get("final", "test", "check")
+	if result != "success" {
+		t.Error("Cache corrupted after race condition test")
 	}
 }
