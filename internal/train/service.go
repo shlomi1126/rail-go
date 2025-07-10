@@ -4,25 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
+	"rail-go/internal/cache"
 	"rail-go/internal/config"
 	"rail-go/internal/logger"
 )
 
-type CacheEntry struct {
-	Data      []string
-	ExpiresAt time.Time
-}
-
 type Service struct {
 	config *config.Config
 	logger *logger.Logger
-	cache  *sync.Map
+	cache  *cache.Cache
 	client *http.Client
 }
 
@@ -47,7 +43,7 @@ func NewService(cfg *config.Config, log *logger.Logger) *Service {
 	return &Service{
 		config: cfg,
 		logger: log,
-		cache:  &sync.Map{},
+		cache:  cache.NewCache(),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -55,15 +51,15 @@ func NewService(cfg *config.Config, log *logger.Logger) *Service {
 }
 
 func (s *Service) GetSchedule(ctx context.Context, from, to string) ([]string, error) {
+	return s.getScheduleWithRetry(ctx, from, to, 3)
+}
+
+func (s *Service) getScheduleWithRetry(ctx context.Context, from, to string, maxRetries int) ([]string, error) {
 	// Check cache first
-	cacheKey := fmt.Sprintf("%s-%s", from, to)
-	if cached, ok := s.cache.Load(cacheKey); ok {
-		entry := cached.(CacheEntry)
-		if time.Now().Before(entry.ExpiresAt) {
-			return entry.Data, nil
+	if cached := s.cache.Get("", from, to); cached != nil {
+		if chunks, ok := cached.([]string); ok {
+			return chunks, nil
 		}
-		// Cache expired, remove it
-		s.cache.Delete(cacheKey)
 	}
 
 	// Build request
@@ -87,14 +83,38 @@ func (s *Service) GetSchedule(ctx context.Context, from, to string) ([]string, e
 	req.Header.Set("User-Agent", s.config.Train.UserAgent)
 	req.Header.Set("ocp-apim-subscription-key", s.config.Train.APIKey)
 
+	s.logger.Info("Making API request",
+		"from_station", from,
+		"to_station", to,
+		"url", req.URL.String())
+	
 	resp, err := s.client.Do(req)
 	if err != nil {
+		s.logger.Error("HTTP request failed",
+			"error", err,
+			"from_station", from,
+			"to_station", to)
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		// Log detailed error information
+		body, _ := io.ReadAll(resp.Body)
+		s.logger.Error("API request failed",
+			"status_code", resp.StatusCode,
+			"response_body", string(body),
+			"from_station", from,
+			"to_station", to,
+			"url", req.URL.String())
+		if maxRetries > 0 && s.shouldRetry(resp.StatusCode) {
+			s.logger.Info("Retrying API request",
+				"retries_left", maxRetries-1,
+				"status_code", resp.StatusCode)
+			time.Sleep(2 * time.Second) // Wait before retry
+			return s.getScheduleWithRetry(ctx, from, to, maxRetries-1)
+		}
+		return nil, fmt.Errorf("API request failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var schedule ScheduleResponse
@@ -106,14 +126,15 @@ func (s *Service) GetSchedule(ctx context.Context, from, to string) ([]string, e
 	result := s.formatSchedule(schedule)
 	chunks := splitMessage(result)
 
-	// Cache result with 5 minute expiration
-	cacheEntry := CacheEntry{
-		Data:      chunks,
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-	}
-	s.cache.Store(cacheKey, cacheEntry)
+	// Cache result
+	s.cache.Set("", from, to, chunks)
 
 	return chunks, nil
+}
+
+func (s *Service) shouldRetry(statusCode int) bool {
+	// Retry on server errors (5xx) and rate limiting (429)
+	return statusCode >= 500 || statusCode == 429
 }
 
 func (s *Service) formatSchedule(schedule ScheduleResponse) string {

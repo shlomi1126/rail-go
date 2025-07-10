@@ -155,3 +155,60 @@ func TestSplitMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestCacheIntegration(t *testing.T) {
+	cfg := NewTestConfig()
+	log := logger.New()
+	service := NewService(cfg, log)
+	
+	from := "3700"
+	to := "4600"
+	testData := []string{"cached train data"}
+	
+	// Set data directly in cache
+	service.cache.Set("", from, to, testData)
+	
+	// Test that cached data is returned
+	result := service.cache.Get("", from, to)
+	if result == nil {
+		t.Fatal("Expected cached data, got nil")
+	}
+	
+	resultSlice, ok := result.([]string)
+	if !ok {
+		t.Fatal("Expected []string from cache, got different type")
+	}
+	
+	if len(resultSlice) != len(testData) {
+		t.Errorf("Expected %d cached items, got %d", len(testData), len(resultSlice))
+	}
+	
+	for i, item := range resultSlice {
+		if item != testData[i] {
+			t.Errorf("Expected cached item %s at index %d, got %s", testData[i], i, item)
+		}
+	}
+}
+
+func TestCacheTTLIntegration(t *testing.T) {
+	cfg := NewTestConfig()
+	log := logger.New()
+	service := NewService(cfg, log)
+	
+	from := "3700"
+	to := "4600"
+	testData := []string{"test data"}
+	
+	// Set data in cache
+	service.cache.Set("", from, to, testData)
+	
+	// Should be available immediately
+	result := service.cache.Get("", from, to)
+	if result == nil {
+		t.Error("Expected cached data immediately after set")
+	}
+	
+	// Note: We can't easily test TTL expiration in integration test
+	// since the cache TTL is set to 30 seconds by default.
+	// The TTL functionality is thoroughly tested in cache_test.go
+}
