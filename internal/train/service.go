@@ -14,6 +14,11 @@ import (
 	"rail-go/internal/logger"
 )
 
+type CacheEntry struct {
+	Data      []string
+	ExpiresAt time.Time
+}
+
 type Service struct {
 	config *config.Config
 	logger *logger.Logger
@@ -53,7 +58,12 @@ func (s *Service) GetSchedule(ctx context.Context, from, to string) ([]string, e
 	// Check cache first
 	cacheKey := fmt.Sprintf("%s-%s", from, to)
 	if cached, ok := s.cache.Load(cacheKey); ok {
-		return cached.([]string), nil
+		entry := cached.(CacheEntry)
+		if time.Now().Before(entry.ExpiresAt) {
+			return entry.Data, nil
+		}
+		// Cache expired, remove it
+		s.cache.Delete(cacheKey)
 	}
 
 	// Build request
@@ -96,8 +106,12 @@ func (s *Service) GetSchedule(ctx context.Context, from, to string) ([]string, e
 	result := s.formatSchedule(schedule)
 	chunks := splitMessage(result)
 
-	// Cache result
-	s.cache.Store(cacheKey, chunks)
+	// Cache result with 5 minute expiration
+	cacheEntry := CacheEntry{
+		Data:      chunks,
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+	s.cache.Store(cacheKey, cacheEntry)
 
 	return chunks, nil
 }
