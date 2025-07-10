@@ -8,7 +8,7 @@ import (
 
 func TestGetStationSuggestions(t *testing.T) {
 	cfg := NewTestConfig()
-	log := logger.New()
+	log, _ := logger.New()
 	service := NewService(cfg, log)
 
 	tests := []struct {
@@ -50,7 +50,7 @@ func TestGetStationSuggestions(t *testing.T) {
 
 func TestGetStationName(t *testing.T) {
 	cfg := NewTestConfig()
-	log := logger.New()
+	log, _ := logger.New()
 	service := NewService(cfg, log)
 
 	tests := []struct {
@@ -82,7 +82,7 @@ func TestGetStationName(t *testing.T) {
 
 func TestFormatTime(t *testing.T) {
 	cfg := NewTestConfig()
-	log := logger.New()
+	log, _ := logger.New()
 	service := NewService(cfg, log)
 
 	tests := []struct {
@@ -158,7 +158,7 @@ func TestSplitMessage(t *testing.T) {
 
 func TestCacheIntegration(t *testing.T) {
 	cfg := NewTestConfig()
-	log := logger.New()
+	log, _ := logger.New()
 	service := NewService(cfg, log)
 	
 	from := "3700"
@@ -192,7 +192,7 @@ func TestCacheIntegration(t *testing.T) {
 
 func TestCacheTTLIntegration(t *testing.T) {
 	cfg := NewTestConfig()
-	log := logger.New()
+	log, _ := logger.New()
 	service := NewService(cfg, log)
 	
 	from := "3700"

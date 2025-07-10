@@ -10,7 +10,7 @@ type Logger struct {
 }
 
 // New creates a new logger instance with production configuration
-func New() *Logger {
+func New() (*Logger, error) {
 	config := zap.NewProductionConfig()
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
@@ -23,14 +23,14 @@ func New() *Logger {
 
 	logger, err := config.Build()
 	if err != nil {
-		panic("failed to create logger: " + err.Error())
+		return nil, err
 	}
 
-	return &Logger{Logger: logger}
+	return &Logger{Logger: logger}, nil
 }
 
 // NewDevelopment creates a new logger instance with development configuration
-func NewDevelopment() *Logger {
+func NewDevelopment() (*Logger, error) {
 	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
@@ -40,52 +40,33 @@ func NewDevelopment() *Logger {
 
 	logger, err := config.Build()
 	if err != nil {
-		panic("failed to create logger: " + err.Error())
+		return nil, err
 	}
 
-	return &Logger{Logger: logger}
+	return &Logger{Logger: logger}, nil
 }
 
 // Info logs an info message with structured fields
-func (l *Logger) Info(msg string, fields ...interface{}) {
-	zapFields := convertToZapFields(fields...)
-	l.Logger.Info(msg, zapFields...)
+func (l *Logger) Info(msg string, fields ...zap.Field) {
+	l.Logger.Info(msg, fields...)
 }
 
 // Error logs an error message with structured fields
-func (l *Logger) Error(msg string, fields ...interface{}) {
-	zapFields := convertToZapFields(fields...)
-	l.Logger.Error(msg, zapFields...)
+func (l *Logger) Error(msg string, fields ...zap.Field) {
+	l.Logger.Error(msg, fields...)
+}
+
+// Warn logs a warning message with structured fields
+func (l *Logger) Warn(msg string, fields ...zap.Field) {
+	l.Logger.Warn(msg, fields...)
 }
 
 // Debug logs a debug message with structured fields
-func (l *Logger) Debug(msg string, fields ...interface{}) {
-	zapFields := convertToZapFields(fields...)
-	l.Logger.Debug(msg, zapFields...)
+func (l *Logger) Debug(msg string, fields ...zap.Field) {
+	l.Logger.Debug(msg, fields...)
 }
 
 // Fatal logs a fatal message with structured fields and exits
-func (l *Logger) Fatal(msg string, fields ...interface{}) {
-	zapFields := convertToZapFields(fields...)
-	l.Logger.Fatal(msg, zapFields...)
-}
-
-// convertToZapFields converts variadic interface{} to zap.Field slice
-func convertToZapFields(fields ...interface{}) []zapcore.Field {
-	if len(fields) == 0 {
-		return nil
-	}
-
-	zapFields := make([]zapcore.Field, 0, len(fields)/2)
-	for i := 0; i < len(fields); i += 2 {
-		if i+1 >= len(fields) {
-			break
-		}
-		key, ok := fields[i].(string)
-		if !ok {
-			continue
-		}
-		zapFields = append(zapFields, zap.Any(key, fields[i+1]))
-	}
-	return zapFields
+func (l *Logger) Fatal(msg string, fields ...zap.Field) {
+	l.Logger.Fatal(msg, fields...)
 }

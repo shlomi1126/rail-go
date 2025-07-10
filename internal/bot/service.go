@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
 	"rail-go/internal/config"
 	"rail-go/internal/logger"
 	"rail-go/internal/train"
@@ -53,10 +54,10 @@ func NewService(cfg *config.Config, log *logger.Logger) (*Service, error) {
 }
 
 func (s *Service) Start(ctx context.Context) error {
-	s.logger.Info("bot service starting", "debug_mode", s.bot.Debug)
+	s.logger.Info("bot service starting", zap.Bool("debug_mode", s.bot.Debug))
 
 	if err := s.sendStartupMessage(ctx); err != nil {
-		s.logger.Error("failed to send startup message", "error", err)
+		s.logger.Error("failed to send startup message", zap.Error(err))
 	}
 
 	updates := s.bot.GetUpdatesChan(tgbotapi.UpdateConfig{
@@ -70,7 +71,7 @@ func (s *Service) Start(ctx context.Context) error {
 			return ctx.Err()
 		case update := <-updates:
 			if err := s.handleUpdate(ctx, update); err != nil {
-				s.logger.Error("failed to handle update", "error", err)
+				s.logger.Error("failed to handle update", zap.Error(err))
 			}
 		}
 	}
@@ -93,14 +94,14 @@ func (s *Service) sendStartupMessage(ctx context.Context) error {
 func (s *Service) handleUpdate(ctx context.Context, update tgbotapi.Update) error {
 	if update.CallbackQuery != nil {
 		s.logger.Info("received callback query",
-			"user_id", update.CallbackQuery.From.ID,
-			"callback_data", update.CallbackQuery.Data)
+			zap.Int64("user_id", update.CallbackQuery.From.ID),
+			zap.String("callback_data", update.CallbackQuery.Data))
 		return s.handleCallbackQuery(ctx, update.CallbackQuery)
 	}
 	if update.Message != nil {
 		s.logger.Info("received message",
-			"user_id", update.Message.From.ID,
-			"text", update.Message.Text)
+			zap.Int64("user_id", update.Message.From.ID),
+			zap.String("text", update.Message.Text))
 		return s.handleMessage(ctx, update.Message)
 	}
 	return nil
@@ -114,10 +115,10 @@ func (s *Service) handleMessage(ctx context.Context, msg *tgbotapi.Message) erro
 	}
 
 	s.logger.Info("handling message",
-		"user_id", msg.From.ID,
-		"chat_id", msg.Chat.ID,
-		"state", currentState,
-		"text", msg.Text)
+		zap.Int64("user_id", msg.From.ID),
+		zap.Int64("chat_id", msg.Chat.ID),
+		zap.String("state", currentState),
+		zap.String("text", msg.Text))
 
 	switch currentState {
 	case "awaitingFromStation", "awaitingToStation":
@@ -130,13 +131,13 @@ func (s *Service) handleMessage(ctx context.Context, msg *tgbotapi.Message) erro
 func (s *Service) handleCallbackQuery(ctx context.Context, query *tgbotapi.CallbackQuery) error {
 	callback := tgbotapi.NewCallback(query.ID, "")
 	if _, err := s.bot.Request(callback); err != nil {
-		s.logger.Error("failed to acknowledge callback", "error", err)
+		s.logger.Error("failed to acknowledge callback", zap.Error(err))
 	}
 
 	s.logger.Info("handling callback query",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID,
-		"data", query.Data)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID),
+		zap.String("data", query.Data))
 
 	switch query.Data {
 	case "home":
@@ -154,44 +155,44 @@ func (s *Service) handleCallbackQuery(ctx context.Context, query *tgbotapi.Callb
 
 func (s *Service) handleHomeRoute(ctx context.Context, query *tgbotapi.CallbackQuery) error {
 	s.logger.Info("handling home route request",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID))
 
 	schedule, err := s.trainService.GetSchedule(ctx, "4600", "8700")
 	if err != nil {
-		s.logger.Error("failed to get home route schedule", "error", err)
+		s.logger.Error("failed to get home route schedule", zap.Error(err))
 		return fmt.Errorf("failed to get home route schedule: %w", err)
 	}
 
 	s.logger.Info("home route schedule retrieved successfully",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID))
 
 	return s.SendMessages(ctx, query.Message.Chat.ID, schedule)
 }
 
 func (s *Service) handleWorkRoute(ctx context.Context, query *tgbotapi.CallbackQuery) error {
 	s.logger.Info("handling work route request",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID))
 
 	schedule, err := s.trainService.GetSchedule(ctx, "8700", "4600")
 	if err != nil {
-		s.logger.Error("failed to get work route schedule", "error", err)
+		s.logger.Error("failed to get work route schedule", zap.Error(err))
 		return fmt.Errorf("failed to get work route schedule: %w", err)
 	}
 
 	s.logger.Info("work route schedule retrieved successfully",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID))
 
 	return s.SendMessages(ctx, query.Message.Chat.ID, schedule)
 }
 
 func (s *Service) handleOtherRoute(ctx context.Context, query *tgbotapi.CallbackQuery) error {
 	s.logger.Info("handling other route request",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID))
 
 	// Initialize the route selection process
 	route := make(map[string]string)
@@ -199,9 +200,9 @@ func (s *Service) handleOtherRoute(ctx context.Context, query *tgbotapi.Callback
 	s.userState.Store(fmt.Sprintf("state_%d", query.Message.Chat.ID), "awaitingFromStation")
 
 	s.logger.Info("route selection started",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID,
-		"state", "awaitingFromStation")
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID),
+		zap.String("state", "awaitingFromStation"))
 
 	return s.SendMessage(ctx, query.Message.Chat.ID,
 		fmt.Sprintf("%s אנא הקלד את האותיות הראשונות של תחנת המוצא.", stationEmoji))
@@ -209,55 +210,55 @@ func (s *Service) handleOtherRoute(ctx context.Context, query *tgbotapi.Callback
 
 func (s *Service) handleSearchTrain(ctx context.Context, query *tgbotapi.CallbackQuery) error {
 	s.logger.Info("handling search train request",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID))
 
 	route, _ := s.userState.Load(fmt.Sprintf("route_%d", query.Message.Chat.ID))
 	routeMap, ok := route.(map[string]string)
 	if !ok {
 		s.logger.Error("invalid route type",
-			"user_id", query.From.ID,
-			"chat_id", query.Message.Chat.ID,
-			"route", route)
+			zap.Int64("user_id", query.From.ID),
+			zap.Int64("chat_id", query.Message.Chat.ID),
+			zap.Any("route", route))
 		return fmt.Errorf("invalid route type")
 	}
 
 	schedule, err := s.trainService.GetSchedule(ctx, routeMap["from"], routeMap["to"])
 	if err != nil {
-		s.logger.Error("failed to get schedule", "error", err)
+		s.logger.Error("failed to get schedule", zap.Error(err))
 		return fmt.Errorf("failed to get schedule: %w", err)
 	}
 
 	s.logger.Info("train schedule retrieved successfully",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID,
-		"to", routeMap["to"])
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID),
+		zap.String("to", routeMap["to"]))
 
 	return s.SendMessages(ctx, query.Message.Chat.ID, schedule)
 }
 
 func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.CallbackQuery) error {
 	s.logger.Info("handling station selection",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID,
-		"station_id", query.Data)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID),
+		zap.String("station_id", query.Data))
 
 	// Get the current state
 	state, _ := s.userState.Load(fmt.Sprintf("state_%d", query.Message.Chat.ID))
 	currentState, ok := state.(string)
 	if !ok {
 		s.logger.Error("invalid state type",
-			"user_id", query.From.ID,
-			"chat_id", query.Message.Chat.ID,
-			"state", state)
+			zap.Int64("user_id", query.From.ID),
+			zap.Int64("chat_id", query.Message.Chat.ID),
+			zap.Any("state", state))
 		return s.SendMessage(ctx, query.Message.Chat.ID,
 			fmt.Sprintf("%s שגיאה במצב. אנא נסה שוב.", warningEmoji))
 	}
 
 	s.logger.Info("current state",
-		"user_id", query.From.ID,
-		"chat_id", query.Message.Chat.ID,
-		"state", currentState)
+		zap.Int64("user_id", query.From.ID),
+		zap.Int64("chat_id", query.Message.Chat.ID),
+		zap.String("state", currentState))
 
 	switch currentState {
 	case "awaitingFromStationSelection":
@@ -266,9 +267,9 @@ func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.Ca
 		routeMap, ok := route.(map[string]string)
 		if !ok {
 			s.logger.Error("invalid route type",
-				"user_id", query.From.ID,
-				"chat_id", query.Message.Chat.ID,
-				"route", route)
+				zap.Int64("user_id", query.From.ID),
+				zap.Int64("chat_id", query.Message.Chat.ID),
+				zap.Any("route", route))
 			return s.SendMessage(ctx, query.Message.Chat.ID,
 				fmt.Sprintf("%s שגיאה בבחירת התחנות. אנא נסה שוב.", warningEmoji))
 		}
@@ -279,9 +280,9 @@ func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.Ca
 		s.userState.Store(fmt.Sprintf("state_%d", query.Message.Chat.ID), "awaitingToStation")
 
 		s.logger.Info("from station selected, now awaiting to station input",
-			"user_id", query.From.ID,
-			"chat_id", query.Message.Chat.ID,
-			"station_id", query.Data)
+			zap.Int64("user_id", query.From.ID),
+			zap.Int64("chat_id", query.Message.Chat.ID),
+			zap.String("station_id", query.Data))
 
 		return s.SendMessage(ctx, query.Message.Chat.ID,
 			fmt.Sprintf("%s אנא הקלד את האותיות הראשונות של תחנת היעד.", stationEmoji))
@@ -291,9 +292,9 @@ func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.Ca
 		routeMap, ok := route.(map[string]string)
 		if !ok {
 			s.logger.Error("invalid route type",
-				"user_id", query.From.ID,
-				"chat_id", query.Message.Chat.ID,
-				"route", route)
+				zap.Int64("user_id", query.From.ID),
+				zap.Int64("chat_id", query.Message.Chat.ID),
+				zap.Any("route", route))
 			return s.SendMessage(ctx, query.Message.Chat.ID,
 				fmt.Sprintf("%s שגיאה בבחירת התחנות. אנא נסה שוב.", warningEmoji))
 		}
@@ -302,10 +303,10 @@ func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.Ca
 		s.userState.Store(fmt.Sprintf("route_%d", query.Message.Chat.ID), routeMap)
 
 		s.logger.Info("to station selected",
-			"user_id", query.From.ID,
-			"chat_id", query.Message.Chat.ID,
-			"from_station", routeMap["from"],
-			"to_station", routeMap["to"])
+			zap.Int64("user_id", query.From.ID),
+			zap.Int64("chat_id", query.Message.Chat.ID),
+			zap.String("from_station", routeMap["from"]),
+			zap.String("to_station", routeMap["to"]))
 
 		btn := tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("חפש %s", searchEmoji), "search_train")
 		inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{btn})
@@ -319,9 +320,9 @@ func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.Ca
 		return err
 	default:
 		s.logger.Error("unknown state",
-			"user_id", query.From.ID,
-			"chat_id", query.Message.Chat.ID,
-			"state", currentState)
+			zap.Int64("user_id", query.From.ID),
+			zap.Int64("chat_id", query.Message.Chat.ID),
+			zap.String("state", currentState))
 		return s.SendMessage(ctx, query.Message.Chat.ID,
 			fmt.Sprintf("%s מצב לא ידוע. אנא נסה שוב.", warningEmoji))
 	}
@@ -329,35 +330,35 @@ func (s *Service) handleStationSelection(ctx context.Context, query *tgbotapi.Ca
 
 func (s *Service) handleAwaitingInput(ctx context.Context, msg *tgbotapi.Message) error {
 	s.logger.Info("handling awaiting input",
-		"user_id", msg.From.ID,
-		"chat_id", msg.Chat.ID,
-		"input", msg.Text)
+		zap.Int64("user_id", msg.From.ID),
+		zap.Int64("chat_id", msg.Chat.ID),
+		zap.String("input", msg.Text))
 
 	// Get the current state
 	state, _ := s.userState.Load(fmt.Sprintf("state_%d", msg.Chat.ID))
 	currentState, ok := state.(string)
 	if !ok {
 		s.logger.Error("invalid state type",
-			"user_id", msg.From.ID,
-			"chat_id", msg.Chat.ID,
-			"state", state)
+			zap.Int64("user_id", msg.From.ID),
+			zap.Int64("chat_id", msg.Chat.ID),
+			zap.Any("state", state))
 		return s.SendMessage(ctx, msg.Chat.ID,
 			fmt.Sprintf("%s שגיאה במצב. אנא נסה שוב.", warningEmoji))
 	}
 
 	s.logger.Info("current state",
-		"user_id", msg.From.ID,
-		"chat_id", msg.Chat.ID,
-		"state", currentState)
+		zap.Int64("user_id", msg.From.ID),
+		zap.Int64("chat_id", msg.Chat.ID),
+		zap.String("state", currentState))
 
 	switch currentState {
 	case "awaitingFromStation":
 		suggestions := s.trainService.GetStationSuggestions(msg.Text)
 		if len(suggestions) == 0 {
 			s.logger.Info("no stations found for input",
-				"user_id", msg.From.ID,
-				"chat_id", msg.Chat.ID,
-				"input", msg.Text)
+				zap.Int64("user_id", msg.From.ID),
+				zap.Int64("chat_id", msg.Chat.ID),
+				zap.String("input", msg.Text))
 			return s.SendMessage(ctx, msg.Chat.ID,
 				fmt.Sprintf("%s לא נמצאו תחנות תואמות. נסה להקליד אותיות אחרות.", warningEmoji))
 		}
@@ -373,7 +374,7 @@ func (s *Service) handleAwaitingInput(ctx context.Context, msg *tgbotapi.Message
 		message.ReplyMarkup = inlineKeyboard
 		_, err := s.bot.Send(message)
 		if err != nil {
-			s.logger.Error("failed to send message", "error", err)
+			s.logger.Error("failed to send message", zap.Error(err))
 			return fmt.Errorf("failed to send message: %w", err)
 		}
 
@@ -384,9 +385,9 @@ func (s *Service) handleAwaitingInput(ctx context.Context, msg *tgbotapi.Message
 		suggestions := s.trainService.GetStationSuggestions(msg.Text)
 		if len(suggestions) == 0 {
 			s.logger.Info("no stations found for input",
-				"user_id", msg.From.ID,
-				"chat_id", msg.Chat.ID,
-				"input", msg.Text)
+				zap.Int64("user_id", msg.From.ID),
+				zap.Int64("chat_id", msg.Chat.ID),
+				zap.String("input", msg.Text))
 			return s.SendMessage(ctx, msg.Chat.ID,
 				fmt.Sprintf("%s לא נמצאו תחנות תואמות. נסה להקליד אותיות אחרות.", warningEmoji))
 		}
@@ -402,7 +403,7 @@ func (s *Service) handleAwaitingInput(ctx context.Context, msg *tgbotapi.Message
 		message.ReplyMarkup = inlineKeyboard
 		_, err := s.bot.Send(message)
 		if err != nil {
-			s.logger.Error("failed to send message", "error", err)
+			s.logger.Error("failed to send message", zap.Error(err))
 			return fmt.Errorf("failed to send message: %w", err)
 		}
 
@@ -411,9 +412,9 @@ func (s *Service) handleAwaitingInput(ctx context.Context, msg *tgbotapi.Message
 		return nil
 	default:
 		s.logger.Error("unknown state",
-			"user_id", msg.From.ID,
-			"chat_id", msg.Chat.ID,
-			"state", currentState)
+			zap.Int64("user_id", msg.From.ID),
+			zap.Int64("chat_id", msg.Chat.ID),
+			zap.String("state", currentState))
 		return s.SendMessage(ctx, msg.Chat.ID,
 			fmt.Sprintf("%s מצב לא ידוע. אנא נסה שוב.", warningEmoji))
 	}
@@ -421,9 +422,9 @@ func (s *Service) handleAwaitingInput(ctx context.Context, msg *tgbotapi.Message
 
 func (s *Service) handleDefaultState(ctx context.Context, msg *tgbotapi.Message) error {
 	s.logger.Info("handling default state",
-		"user_id", msg.From.ID,
-		"chat_id", msg.Chat.ID,
-		"text", msg.Text)
+		zap.Int64("user_id", msg.From.ID),
+		zap.Int64("chat_id", msg.Chat.ID),
+		zap.String("text", msg.Text))
 
 	switch msg.Text {
 	case trainEmoji:
