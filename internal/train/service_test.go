@@ -81,9 +81,6 @@ func TestGetStationName(t *testing.T) {
 }
 
 func TestFormatTime(t *testing.T) {
-	cfg := NewTestConfig()
-	log, _ := logger.New()
-	service := NewService(cfg, log)
 
 	tests := []struct {
 		name     string
@@ -104,7 +101,7 @@ func TestFormatTime(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := service.formatTime(tt.timeStr)
+			result := formatTime(tt.timeStr)
 			if result != tt.expected {
 				t.Errorf("formatTime() got %s, want %s", result, tt.expected)
 			}

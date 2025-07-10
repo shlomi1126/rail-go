@@ -31,7 +31,7 @@ type Service struct {
 	config       *config.Config
 	logger       *logger.Logger
 	userState    *sync.Map
-	trainService *train.Service
+	trainService TrainService
 }
 
 func NewService(cfg *config.Config, log *logger.Logger) (*Service, error) {
