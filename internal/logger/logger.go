@@ -1,85 +1,74 @@
 package logger
 
 import (
-	"os"
-	"time"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Logger struct {
-	logger zerolog.Logger
+	*zap.Logger
 }
 
+// New creates a new logger instance with production configuration
 func New() *Logger {
-	// Configure zerolog
-	zerolog.TimeFieldFormat = time.RFC3339
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	config := zap.NewProductionConfig()
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.MessageKey = "message"
+	config.EncoderConfig.LevelKey = "level"
+	config.EncoderConfig.CallerKey = "" // Remove caller information
+	config.DisableCaller = true         // Disable caller logging
+	config.DisableStacktrace = true     // Disable stacktrace logging
 
-	// Create a logger with pretty console output
-	logger := log.Output(zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: time.RFC3339,
-	})
-
-	return &Logger{
-		logger: logger,
+	logger, err := config.Build()
+	if err != nil {
+		// In case of error, return a no-op logger
+		logger = zap.NewNop()
 	}
+
+	return &Logger{Logger: logger}
 }
 
-func (l *Logger) Info(msg string, fields ...interface{}) {
-	event := l.logger.Info()
-	for i := 0; i < len(fields); i += 2 {
-		if i+1 < len(fields) {
-			key, ok := fields[i].(string)
-			if !ok {
-				continue
-			}
-			event.Interface(key, fields[i+1])
-		}
+// NewDevelopment creates a new logger instance with development configuration
+func NewDevelopment() *Logger {
+	config := zap.NewDevelopmentConfig()
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	config.EncoderConfig.CallerKey = "" // Remove caller information
+	config.DisableCaller = true         // Disable caller logging
+	config.DisableStacktrace = true     // Disable stacktrace logging
+
+	logger, err := config.Build()
+	if err != nil {
+		// In case of error, return a no-op logger
+		logger = zap.NewNop()
 	}
-	event.Msg(msg)
+
+	return &Logger{Logger: logger}
 }
 
-func (l *Logger) Error(msg string, fields ...interface{}) {
-	event := l.logger.Error()
-	for i := 0; i < len(fields); i += 2 {
-		if i+1 < len(fields) {
-			key, ok := fields[i].(string)
-			if !ok {
-				continue
-			}
-			event.Interface(key, fields[i+1])
-		}
-	}
-	event.Msg(msg)
+// Info logs an info message with structured fields
+func (l *Logger) Info(msg string, fields ...zap.Field) {
+	l.Logger.Info(msg, fields...)
 }
 
-func (l *Logger) Debug(msg string, fields ...interface{}) {
-	event := l.logger.Debug()
-	for i := 0; i < len(fields); i += 2 {
-		if i+1 < len(fields) {
-			key, ok := fields[i].(string)
-			if !ok {
-				continue
-			}
-			event.Interface(key, fields[i+1])
-		}
-	}
-	event.Msg(msg)
+// Error logs an error message with structured fields
+func (l *Logger) Error(msg string, fields ...zap.Field) {
+	l.Logger.Error(msg, fields...)
 }
 
-func (l *Logger) Fatal(msg string, fields ...interface{}) {
-	event := l.logger.Fatal()
-	for i := 0; i < len(fields); i += 2 {
-		if i+1 < len(fields) {
-			key, ok := fields[i].(string)
-			if !ok {
-				continue
-			}
-			event.Interface(key, fields[i+1])
-		}
-	}
-	event.Msg(msg)
+// Warn logs a warning message with structured fields
+func (l *Logger) Warn(msg string, fields ...zap.Field) {
+	l.Logger.Warn(msg, fields...)
+}
+
+// Debug logs a debug message with structured fields
+func (l *Logger) Debug(msg string, fields ...zap.Field) {
+	l.Logger.Debug(msg, fields...)
+}
+
+// Fatal logs a fatal message with structured fields and exits
+func (l *Logger) Fatal(msg string, fields ...zap.Field) {
+	l.Logger.Fatal(msg, fields...)
 }

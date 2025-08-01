@@ -9,10 +9,12 @@ import (
 )
 
 type Config struct {
-	Bot struct {
-		Token   string
-		Debug   bool
-		Timeout int
+	Version string
+	Bot     struct {
+		Token       string
+		Debug       bool
+		Timeout     int
+		AdminChatID int64
 	}
 	Scheduler struct {
 		DefaultInterval time.Duration
@@ -42,10 +44,18 @@ func Load() (*Config, error) {
 
 	cfg := &Config{}
 
+	// Version
+	cfg.Version = getEnvOrDefault("APP_VERSION", "1.0.0")
+
 	// Bot configuration
 	cfg.Bot.Token = getEnvOrDefault("BOT_TOKEN", "")
 	cfg.Bot.Debug = getEnvBoolOrDefault("BOT_DEBUG", false)
 	cfg.Bot.Timeout = getEnvIntOrDefault("BOT_TIMEOUT", 60)
+	adminChatID, err := strconv.ParseInt(getEnvOrDefault("BOT_ADMIN_CHAT_ID", "0"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Bot.AdminChatID = adminChatID
 
 	// Scheduler configuration
 	cfg.Scheduler.DefaultInterval = time.Hour * 24 * 30 // Default to monthly

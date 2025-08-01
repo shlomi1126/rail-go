@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"go.uber.org/zap"
 	"rail-go/internal/bot"
 	"rail-go/internal/config"
 	"rail-go/internal/logger"
@@ -29,7 +30,7 @@ func main() {
 	// Initialize bot service
 	botService, err := bot.NewService(cfg, log)
 	if err != nil {
-		log.Fatal("failed to initialize bot service", "error", err)
+		log.Fatal("failed to initialize bot service", zap.Error(err))
 	}
 
 	// Initialize scheduler
@@ -37,7 +38,7 @@ func main() {
 
 	// Create monthly notification task
 	if err := sched.ScheduleMonthlyTask(ctx, botService, cfg.Notifications.DefaultChatID); err != nil {
-		log.Fatal("failed to schedule monthly task", "error", err)
+		log.Fatal("failed to schedule monthly task", zap.Error(err))
 	}
 
 	// Setup graceful shutdown
@@ -52,6 +53,6 @@ func main() {
 
 	// Start the bot service
 	if err := botService.Start(ctx); err != nil {
-		log.Fatal("bot service failed", "error", err)
+		log.Fatal("bot service failed", zap.Error(err))
 	}
 }

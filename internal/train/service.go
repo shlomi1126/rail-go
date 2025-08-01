@@ -2,23 +2,25 @@ package train
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"net/url"
 	"strings"
-	"sync"
 	"time"
 
+	"rail-go/internal/cache"
 	"rail-go/internal/config"
 	"rail-go/internal/logger"
+
+	"go.uber.org/zap"
 )
 
 type Service struct {
-	config *config.Config
-	logger *logger.Logger
-	cache  *sync.Map
-	client *http.Client
+	config    *config.Config
+	logger    *logger.Logger
+	cache     cache.CacheInterface
+	client    HTTPClient
+	endpoints []Endpoint
 }
 
 type ScheduleResponse struct {
@@ -27,6 +29,18 @@ type ScheduleResponse struct {
 			Trains []TrainRoutePart `json:"trains"`
 		} `json:"travels"`
 	} `json:"result"`
+}
+
+// Mobile API response format (alternative structure)
+type MobileScheduleResponse struct {
+	Data []struct {
+		OriginStationId      int    `json:"OriginStationId"`
+		DestinationStationId int    `json:"DestinationStationId"`
+		DepartureTime        string `json:"DepartureTime"`
+		ArrivalTime          string `json:"ArrivalTime"`
+		OriginPlatform       int    `json:"OriginPlatform"`
+		DestinationPlatform  int    `json:"DestinationPlatform"`
+	} `json:"data"`
 }
 
 type TrainRoutePart struct {
@@ -39,102 +53,102 @@ type TrainRoutePart struct {
 }
 
 func NewService(cfg *config.Config, log *logger.Logger) *Service {
+	endpoints := []Endpoint{
+		// Primary endpoint (current one)
+		NewAzureEndpoint("https://israelrail.azurefd.net/rjpa-prod/api/v1/timetable/searchTrainLuzForDateTime", cfg),
+		// Alternative endpoint from research
+		NewMobileEndpoint("http://191.233.107.3/rail/v01/schedulev2/", cfg),
+		// Backup endpoint (mobile format)
+		NewMobileEndpoint("https://www.rail.co.il/rail/v01/schedulev2/", cfg),
+	}
+
 	return &Service{
-		config: cfg,
-		logger: log,
-		cache:  &sync.Map{},
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		config:    cfg,
+		logger:    log,
+		cache:     cache.NewCache(),
+		client:    &http.Client{Timeout: 30 * time.Second},
+		endpoints: endpoints,
 	}
 }
 
 func (s *Service) GetSchedule(ctx context.Context, from, to string) ([]string, error) {
+	return s.getScheduleWithRetry(ctx, from, to, 3)
+}
+
+func (s *Service) getScheduleWithRetry(ctx context.Context, from, to string, _ int) ([]string, error) {
 	// Check cache first
-	cacheKey := fmt.Sprintf("%s-%s", from, to)
-	if cached, ok := s.cache.Load(cacheKey); ok {
-		return cached.([]string), nil
+	if cached := s.cache.Get("", from, to); cached != nil {
+		if chunks, ok := cached.([]string); ok {
+			return chunks, nil
+		}
 	}
 
-	// Build request
-	params := url.Values{}
-	params.Add("fromStation", from)
-	params.Add("toStation", to)
-	params.Add("date", time.Now().Format("2006-01-02"))
-	params.Add("hour", time.Now().Format("15:04:05"))
-	params.Add("scheduleType", "2")
-	params.Add("systemType", "1")
-	params.Add("languageId", "Hebrew")
+	// Try each endpoint until one works
+	for i, endpoint := range s.endpoints {
+		s.logger.Info("Trying API endpoint",
+			zap.Int("endpoint_index", i+1),
+			zap.Int("total_endpoints", len(s.endpoints)),
+			zap.String("url", endpoint.GetURL()),
+			zap.String("format", endpoint.GetFormat()))
 
-	// Make request
-	req, err := http.NewRequestWithContext(ctx, "GET",
-		"https://israelrail.azurefd.net/rjpa-prod/api/v1/timetable/searchTrainLuzForDateTime", nil)
+		result, err := s.tryEndpoint(ctx, endpoint, from, to)
+		if err == nil {
+			s.logger.Info("Successfully got data from endpoint",
+				zap.Int("endpoint_index", i+1),
+				zap.String("url", endpoint.GetURL()))
+			// Cache result
+			s.cache.Set("", from, to, result)
+			return result, nil
+		}
+
+		s.logger.Warn("Endpoint failed, trying next",
+			zap.Int("endpoint_index", i+1),
+			zap.String("url", endpoint.GetURL()),
+			zap.String("error", err.Error()))
+	}
+
+	return nil, fmt.Errorf("all API endpoints failed")
+}
+
+func (s *Service) tryEndpoint(ctx context.Context, endpoint Endpoint, from, to string) ([]string, error) {
+	req, err := endpoint.BuildRequest(ctx, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.URL.RawQuery = params.Encode()
+	// Set headers
 	req.Header.Set("User-Agent", s.config.Train.UserAgent)
-	req.Header.Set("ocp-apim-subscription-key", s.config.Train.APIKey)
+	if endpoint.RequiresAPIKey() {
+		req.Header.Set("ocp-apim-subscription-key", s.config.Train.APIKey)
+	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API request failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var schedule ScheduleResponse
-	if err := json.NewDecoder(resp.Body).Decode(&schedule); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Parse response using endpoint-specific parser
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Format response and split into chunks
-	result := s.formatSchedule(schedule)
-	chunks := splitMessage(result)
-
-	// Cache result
-	s.cache.Store(cacheKey, chunks)
-
-	return chunks, nil
-}
-
-func (s *Service) formatSchedule(schedule ScheduleResponse) string {
-	var result string
-	count := 0
-	for i, travel := range schedule.Result.Travels {
-		if count >= 5 {
-			break
-		}
-		result += fmt.Sprintf("🚆 %d:\n", i+1)
-		for j, train := range travel.Trains {
-			if count >= 5 {
-				break
-			}
-			result += fmt.Sprintf("  🚂 %d:\n", j+1)
-			result += fmt.Sprintf("    עליה: %s (רציף %d)\n",
-				s.GetStationName(fmt.Sprintf("%d", train.OriginStation)), train.OriginPlatform)
-			result += fmt.Sprintf("    זמן יציאת הרכבת: %s\n",
-				s.formatTime(train.DepartureTime))
-			result += fmt.Sprintf("    אל: %s (רציף %d)\n",
-				s.GetStationName(fmt.Sprintf("%d", train.DestinationStation)), train.DestPlatform)
-			result += fmt.Sprintf("    זמן הגעה: %s\n",
-				s.formatTime(train.ArrivalTime))
-			count++
-		}
-		result += "\n"
+	result, err := endpoint.ParseResponse(body)
+	if err != nil {
+		return nil, err
 	}
-	return result
+
+	return splitMessage(result), nil
 }
 
 func (s *Service) GetStationName(stationID string) string {
-	if station, ok := STATIONS[stationID]; ok {
-		return station["Heb"]
-	}
-	return stationID
+	return getStationName(stationID)
 }
 
 func (s *Service) GetStationSuggestions(query string) map[string]string {
@@ -153,34 +167,4 @@ func (s *Service) GetStationSuggestions(query string) map[string]string {
 	}
 
 	return suggestions
-}
-
-func (s *Service) formatTime(timeStr string) string {
-	t, err := time.Parse("2006-01-02T15:04:05", timeStr)
-	if err != nil {
-		return timeStr
-	}
-	return t.Format("15:04:05")
-}
-
-func splitMessage(message string) []string {
-	const maxLength = 4000
-	var chunks []string
-	currentChunk := ""
-	lines := strings.Split(message, "\n")
-
-	for _, line := range lines {
-		if len(currentChunk)+len(line)+1 > maxLength {
-			chunks = append(chunks, currentChunk)
-			currentChunk = line + "\n"
-		} else {
-			currentChunk += line + "\n"
-		}
-	}
-
-	if currentChunk != "" {
-		chunks = append(chunks, currentChunk)
-	}
-
-	return chunks
 }

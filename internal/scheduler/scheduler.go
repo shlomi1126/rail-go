@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"rail-go/internal/bot"
 	"rail-go/internal/logger"
 )
@@ -38,7 +39,7 @@ func (s *Scheduler) ScheduleTask(ctx context.Context, task *Task) error {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				s.logger.Error("panic in scheduled task", "taskID", task.ID, "error", r)
+				s.logger.Error("panic in scheduled task", zap.String("taskID", task.ID), zap.Any("error", r))
 			}
 		}()
 
@@ -48,11 +49,11 @@ func (s *Scheduler) ScheduleTask(ctx context.Context, task *Task) error {
 		for {
 			select {
 			case <-ctx.Done():
-				s.logger.Info("shutting down scheduler", "taskID", task.ID)
+				s.logger.Info("shutting down scheduler", zap.String("taskID", task.ID))
 				return
 			case <-ticker.C:
 				if err := task.Execute(); err != nil {
-					s.logger.Error("task execution failed", "taskID", task.ID, "error", err)
+					s.logger.Error("task execution failed", zap.String("taskID", task.ID), zap.Error(err))
 				}
 			}
 		}
