@@ -73,15 +73,9 @@ func (s *Service) Start(ctx context.Context) error {
 
 func (s *Service) handleUpdate(ctx context.Context, update tgbotapi.Update) error {
 	if update.CallbackQuery != nil {
-		s.logger.Info("received callback query",
-			"user_id", update.CallbackQuery.From.ID,
-			"callback_data", update.CallbackQuery.Data)
 		return s.handleCallbackQuery(ctx, update.CallbackQuery)
 	}
 	if update.Message != nil {
-		s.logger.Info("received message",
-			"user_id", update.Message.From.ID,
-			"text", update.Message.Text)
 		return s.handleMessage(ctx, update.Message)
 	}
 	return nil
@@ -94,7 +88,7 @@ func (s *Service) handleMessage(ctx context.Context, msg *tgbotapi.Message) erro
 		currentState = "default"
 	}
 
-	s.logger.Info("handling message",
+	s.logger.Debug("handling message",
 		"user_id", msg.From.ID,
 		"chat_id", msg.Chat.ID,
 		"state", currentState,
@@ -114,7 +108,7 @@ func (s *Service) handleCallbackQuery(ctx context.Context, query *tgbotapi.Callb
 		s.logger.Error("failed to acknowledge callback", "error", err)
 	}
 
-	s.logger.Info("handling callback query",
+	s.logger.Debug("handling callback query",
 		"user_id", query.From.ID,
 		"chat_id", query.Message.Chat.ID,
 		"data", query.Data)
@@ -189,7 +183,7 @@ func (s *Service) handleOtherRoute(ctx context.Context, query *tgbotapi.Callback
 }
 
 func (s *Service) handleSearchTrain(ctx context.Context, query *tgbotapi.CallbackQuery) error {
-	s.logger.Info("handling search train request",
+	s.logger.Debug("handling search train request",
 		"user_id", query.From.ID,
 		"chat_id", query.Message.Chat.ID)
 

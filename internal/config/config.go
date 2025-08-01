@@ -16,12 +16,12 @@ type Config struct {
 	}
 	Scheduler struct {
 		DefaultInterval time.Duration
-		RetryAttempts  int
+		RetryAttempts   int
 	}
 	Notifications struct {
 		DefaultChatID int64
-		TimeFormat   string
-		Templates    map[string]string
+		TimeFormat    string
+		Templates     map[string]string
 	}
 	Train struct {
 		APIKey    string
@@ -64,9 +64,9 @@ func Load() (*Config, error) {
 
 	// Train service configuration
 	cfg.Train.APIKey = getEnvOrDefault("TRAIN_API_KEY", "")
-	cfg.Train.UserAgent = getEnvOrDefault("TRAIN_USER_AGENT", 
+	cfg.Train.UserAgent = getEnvOrDefault("TRAIN_USER_AGENT",
 		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
-	cfg.Train.BaseURL = getEnvOrDefault("TRAIN_BASE_URL", 
+	cfg.Train.BaseURL = getEnvOrDefault("TRAIN_BASE_URL",
 		"https://israelrail.azurefd.net/rjpa-prod/api/v1")
 	cfg.Train.Timeout = time.Duration(getEnvIntOrDefault("TRAIN_TIMEOUT", 10)) * time.Second
 
@@ -96,4 +96,4 @@ func getEnvBoolOrDefault(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
-} 
+}

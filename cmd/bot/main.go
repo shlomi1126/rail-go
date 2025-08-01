@@ -13,6 +13,8 @@ import (
 )
 
 func main() {
+	// Initialize logger first
+	log := logger.New()
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -21,11 +23,8 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		panic(err)
+		log.Fatal("failed to load configuration", "error", err)
 	}
-
-	// Initialize logger
-	log := logger.New()
 
 	// Initialize bot service
 	botService, err := bot.NewService(cfg, log)
